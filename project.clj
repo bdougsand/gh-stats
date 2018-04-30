@@ -8,6 +8,7 @@
                  [http-kit "2.3.0"]
                  [org.clojure/data.json "0.2.6"]
                  [environ "1.1.0"]]
+  :plugins [[lein-environ "1.1.0"]]
   :main ^:skip-aot cfa-stats.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})
