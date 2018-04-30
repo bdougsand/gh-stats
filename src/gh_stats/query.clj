@@ -25,21 +25,31 @@
          (interpose ["\n"] (map make-query-from-spec specs))))
 
 (defn make-query-from-spec [spec]
-  (cond (list? spec) (let [[term & subquery] spec
-                           opts (and (map? (first subquery)) (first subquery))]
-                       (concat [(name term)]
-                               (when opts (concat ["("]
-                                                  (query-termlist opts)
-                                                  [")"]))
-                               [" {"]
-                               (query-from-specs (if opts (rest subquery) subquery))
-                               ["\n}"]))
+  (cond (or (list? spec)
+            (vector? spec))
+        (let [[term & [opts :as subquery]] spec
+              opts (and (map? opts) opts)]
+          (concat [(name term)]
+                  (when opts (concat ["("]
+                                     (query-termlist opts)
+                                     [")"]))
+                  [" {"]
+                  (query-from-specs (if opts (rest subquery) subquery))
+                  ["\n}"]))
 
         :else (query-term spec)))
 
-(defmacro make-query [& specs]
-  `(str "query {\n" ~@(mapcat make-query-from-spec specs) "}"))
+(defn merge-adjacent-strings [coll]
+  (mapcat (fn [[x :as xs]]
+            (if (string? x)
+              [(apply str xs)]
+              xs))
+          (partition-by string? coll)))
+
+(defn make-query [specs]
+  (str "query {\n" (apply str (mapcat make-query-from-spec specs)) "\n}"))
 
 (defmacro defquery [name params & specs]
   `(defn ~name ~params
-     (str "query {\n" ~@(mapcat make-query-from-spec specs) "}")))
+     (str "query {\n" ~@(merge-adjacent-strings
+                         (mapcat make-query-from-spec specs)) "\n}")))
