@@ -1,12 +1,15 @@
 (ns gh-stats.orgs
   (:require [net.cgrand.enlive-html :as html]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [clojure.java.io :as io])
   (:import [java.nio.file Paths]))
 
 (def brigade-list "https://brigade.codeforamerica.org/brigades")
 
+(def missing-socials
+  {"Code for Boston" {:github "https://github.com/codeforboston"}
+   "BetaNYC" {:github "https://github.com/BetaNYC"}})
 
-(def page (html/html-resource (java.net.URL. brigade-list)))
 
 (defn resolve-cfa-link [rel-url]
   (str "https://brigade.codeforamerica.org" rel-url))
@@ -19,7 +22,7 @@
   (let [links (html/select page [:a.button])]
     (into {} (keep (fn [{{:keys [title href]} :attrs}]
                      (when-let [[_ social] (when title (re-find #"Brigade social: (.*)" title))]
-                       [(str/lower-case social) href])))
+                       [(keyword (str/lower-case social)) href])))
           links)))
 
 (defn get-socials [url]
@@ -31,12 +34,27 @@
           (do (Thread/sleep 250)
               [org-name (get-socials org-link)]))))
 
-(comment
-  (def brigade-info (collect-brigades page)))
+(defn load-brigades-from-file
+  ([path]
+   (try
+     (with-open [in (java.io.PushbackReader. (io/reader path))]
+       (clojure.edn/read in))
 
-(defn fix-keys [m]
-  (into {} (map (fn [[k v]] [(keyword (str/lower-case k)) v])) m))
-(map #(get (val %) "github") brigade-info)
-(spit "resources/brigades.edn" (pr-str brigade-info))
-(comment
-  (spit "resources/brigades.edn" (pr-str brigade-info)))
+     (catch java.io.FileNotFoundException _
+       nil)))
+  ([]
+   (load-brigades-from-file "resources/brigades.edn")))
+
+(defn load-brigades-from-site
+  ([url]
+   (-> (java.net.URL. brigade-list)
+       (html/html-resource)
+       (collect-brigades)))
+  ([]
+   (load-brigades-from-site brigade-list)))
+
+(def brigade-info
+  (delay (or (load-brigades-from-file)
+             (let [info (merge-with merge missing-socials (load-brigades-from-site))]
+               (spit "resources/brigades.edn" (pr-str info))
+               info))))
