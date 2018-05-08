@@ -4,6 +4,7 @@
             [org.httpkit.client :as http]
 
             [gh-stats.query :refer [defquery make-query]]
+            [gh-stats.orgs :refer [brigade-info]]
             [clojure.instant :refer [read-instant-timestamp]]
             [clojure.string :as str]
             [clojure.java.io :as io])
@@ -62,6 +63,17 @@
 
 (defn make-org-records [data]
   (map make-repo-record (-> data :organization :repositories :nodes)))
+
+(defn github-project-info [url]
+  (let [url (io/as-url url)
+        [_ org-name] (re-find #"(?:/)([^/]+)" (.getPath url))]
+    (get-org-data org-name)) )
+
+(defmulti projects-info #(.getHost (io/as-url %)))
+(defmethod projects-info :default [url] nil)
+
+(defmethod projects-info "github.com" [url] (github-project-info url))
+(defmethod projects-info "www.github.com" [url] (github-project-info url))
 
 (defn collect-org-records [orgs]
   (into {} (map (juxt identity (comp make-org-records get-org-data))) orgs))
